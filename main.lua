@@ -7,8 +7,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -16,38 +15,39 @@ local Mouse = LocalPlayer:GetMouse()
 
 -- // AYARLAR
 local PASSWORD = "1234"
-local FLING_SPEED = 20000
 local AIM_FOV = 300
+local FLING_SPEED = 20000
 local AIMBOT_KEY = Enum.UserInputType.MouseButton2
 
--- // TEMA (MAT SİYAH & KAN KIRMIZISI)
+-- // TEMA
 local T_BG = Color3.fromRGB(12, 12, 12)
 local T_SIDE = Color3.fromRGB(18, 18, 18)
-local T_ACCENT = Color3.fromRGB(220, 20, 20) -- MM2 Kırmızısı
+local T_ACCENT = Color3.fromRGB(0, 255, 100) -- Parlak Yeşil (ESP Belli Olsun)
 local T_TEXT = Color3.fromRGB(240, 240, 240)
-local T_BTN = Color3.fromRGB(25, 25, 30)
+local T_BTN = Color3.fromRGB(30, 30, 35)
 
 -- // DURUMLAR
 local States = {
+    ESP = false,
+    TriggerBot = false,
+    SilentAim = false,
     Fling = false,
-    GlobalAimbot = false,
-    MM2Aimbot = false,
-    GlobalESP = false,
-    MM2ESP = false,
+    Aimbot = false,
     KillAll = false,
     AutoGun = false,
     Noclip = false, 
-    Speed = false
+    Speed = false,
+    WallCheck = false
 }
 
 -- // TEMİZLİK
-for _, v in pairs(game.CoreGui:GetChildren()) do
-    if v.Name == "EnsMM2SpecialV68" or v.Name == "EnsESPFolder" then v:Destroy() end
+for _, v in pairs(CoreGui:GetChildren()) do
+    if v.Name == "EnsV72ESP" or v.Name == "EnsESPContainer" then v:Destroy() end
 end
 
 -- // GUI OLUŞTURMA
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "EnsMM2SpecialV68"
+ScreenGui.Name = "EnsV72ESP"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 
@@ -55,7 +55,7 @@ ScreenGui.ResetOnSpawn = false
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
-MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -225)
 MainFrame.BackgroundColor3 = T_BG
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
@@ -69,11 +69,9 @@ local Stroke = Instance.new("UIStroke", MainFrame)
 Stroke.Color = T_ACCENT
 Stroke.Thickness = 1.5
 
--- Sidebar
 local Sidebar = Instance.new("Frame")
 Sidebar.Size = UDim2.new(0.25, 0, 1, 0)
 Sidebar.BackgroundColor3 = T_SIDE
-Sidebar.BorderSizePixel = 0
 Sidebar.Parent = MainFrame
 Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 8)
 
@@ -84,9 +82,8 @@ SidebarFix.BackgroundColor3 = T_SIDE
 SidebarFix.BorderSizePixel = 0
 SidebarFix.Parent = Sidebar
 
--- Başlık
 local Title = Instance.new("TextLabel")
-Title.Text = "ENS V68"
+Title.Text = "ENS V72"
 Title.Size = UDim2.new(1, 0, 0.1, 0)
 Title.BackgroundTransparency = 1
 Title.TextColor3 = T_ACCENT
@@ -94,7 +91,6 @@ Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 24
 Title.Parent = Sidebar
 
--- Tab Tutucu
 local TabHolder = Instance.new("Frame")
 TabHolder.Size = UDim2.new(1, 0, 0.9, 0)
 TabHolder.Position = UDim2.new(0, 0, 0.1, 0)
@@ -102,17 +98,14 @@ TabHolder.BackgroundTransparency = 1
 TabHolder.Parent = Sidebar
 local TabList = Instance.new("UIListLayout")
 TabList.Parent = TabHolder
-TabList.SortOrder = Enum.SortOrder.LayoutOrder
 TabList.Padding = UDim.new(0, 5)
 
--- İçerik
 local Content = Instance.new("Frame")
 Content.Size = UDim2.new(0.73, 0, 0.9, 0)
 Content.Position = UDim2.new(0.26, 0, 0.05, 0)
 Content.BackgroundTransparency = 1
 Content.Parent = MainFrame
 
--- Kapatma
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Text = "X"
 CloseBtn.Size = UDim2.new(0, 25, 0, 25)
@@ -201,7 +194,159 @@ local function GetPlayerRole(plr)
     return "Innocent"
 end
 
--- AUTO GUN (MM2 ÖZEL - KENE MODU)
+-- SAĞLAM ESP SİSTEMİ
+local ESPContainer = Instance.new("Folder", CoreGui)
+ESPContainer.Name = "EnsESPContainer"
+
+local function AddESP(player)
+    if player == LocalPlayer then return end
+    
+    local function UpdateHighlight(char)
+        if not char then return end
+        
+        -- Eski ESP'yi sil
+        if char:FindFirstChild("EnsESP") then char.EnsESP:Destroy() end
+        if char:FindFirstChild("EnsBillboard") then char.EnsBillboard:Destroy() end
+        
+        if not States.ESP then return end -- ESP Kapalıysa yapma
+
+        -- HIGHLIGHT (VURGU)
+        local hl = Instance.new("Highlight")
+        hl.Name = "EnsESP"
+        hl.Adornee = char
+        hl.FillTransparency = 0.5
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        
+        -- BILLBOARD (İSİM)
+        local bg = Instance.new("BillboardGui")
+        bg.Name = "EnsBillboard"
+        bg.Adornee = char:WaitForChild("Head", 1)
+        bg.Size = UDim2.new(0, 200, 0, 50)
+        bg.StudsOffset = Vector3.new(0, 2, 0)
+        bg.AlwaysOnTop = true
+        
+        local txt = Instance.new("TextLabel", bg)
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.BackgroundTransparency = 1
+        txt.TextStrokeTransparency = 0
+        txt.Font = Enum.Font.GothamBold
+        txt.TextSize = 14
+        
+        -- Renk Ayarı (MM2)
+        local role = GetPlayerRole(player)
+        if role == "Murderer" then
+            hl.FillColor = Color3.fromRGB(255, 0, 0)
+            hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+            txt.TextColor3 = Color3.fromRGB(255, 0, 0)
+            txt.Text = player.Name .. " [KATİL]"
+        elseif role == "Sheriff" then
+            hl.FillColor = Color3.fromRGB(0, 100, 255)
+            hl.OutlineColor = Color3.fromRGB(0, 100, 255)
+            txt.TextColor3 = Color3.fromRGB(0, 100, 255)
+            txt.Text = player.Name .. " [ŞERİF]"
+        else
+            hl.FillColor = Color3.fromRGB(255, 255, 255)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            txt.Text = player.Name
+        end
+        
+        hl.Parent = char
+        bg.Parent = char
+    end
+
+    player.CharacterAdded:Connect(UpdateHighlight)
+    if player.Character then UpdateHighlight(player.Character) end
+end
+
+local function ToggleESP(state)
+    States.ESP = state
+    if state then
+        -- Tüm oyunculara ekle
+        for _, p in pairs(Players:GetPlayers()) do AddESP(p) end
+        Players.PlayerAdded:Connect(AddESP)
+        
+        -- GunDrop Loop
+        task.spawn(function()
+            while States.ESP do
+                for _, o in pairs(Workspace:GetDescendants()) do
+                    if o.Name == "GunDrop" and not o:FindFirstChild("EnsESPGun") then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "EnsESPGun"
+                        hl.Adornee = o
+                        hl.FillColor = Color3.fromRGB(255, 215, 0)
+                        hl.OutlineColor = Color3.fromRGB(255, 215, 0)
+                        hl.Parent = o
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    else
+        -- Temizle
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Character then
+                if p.Character:FindFirstChild("EnsESP") then p.Character.EnsESP:Destroy() end
+                if p.Character:FindFirstChild("EnsBillboard") then p.Character.EnsBillboard:Destroy() end
+            end
+        end
+        for _, o in pairs(Workspace:GetDescendants()) do
+            if o.Name == "GunDrop" and o:FindFirstChild("EnsESPGun") then o.EnsESPGun:Destroy() end
+        end
+    end
+end
+
+-- TRIGGER BOT (FIXED RAYCAST)
+local function ToggleTrigger(state)
+    States.TriggerBot = state
+    if state then
+        task.spawn(function()
+            while States.TriggerBot do
+                if LocalPlayer.Character then
+                    local mouseTgt = Mouse.Target
+                    if mouseTgt and mouseTgt.Parent then
+                        local hum = mouseTgt.Parent:FindFirstChild("Humanoid") or (mouseTgt.Parent.Parent and mouseTgt.Parent.Parent:FindFirstChild("Humanoid"))
+                        if hum and hum.Health > 0 then
+                            local plr = Players:GetPlayerFromCharacter(hum.Parent)
+                            if plr and plr ~= LocalPlayer then
+                                -- Wallcheck
+                                local origin = Camera.CFrame.Position
+                                local dir = (mouseTgt.Position - origin).Unit * (mouseTgt.Position - origin).Magnitude
+                                local params = RaycastParams.new()
+                                params.FilterDescendantsInstances = {LocalPlayer.Character}
+                                local ray = Workspace:Raycast(origin, dir, params)
+                                
+                                if not States.WallCheck or (ray and ray.Instance:IsDescendantOf(hum.Parent)) then
+                                    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                                    if tool then tool:Activate() end
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(0.05)
+            end
+        end)
+    end
+end
+
+-- FLING
+local function StartFling()
+    task.spawn(function()
+        while States.Fling do
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local r = LocalPlayer.Character.HumanoidRootPart
+                r.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                local v = r.AssemblyLinearVelocity
+                r.AssemblyLinearVelocity = Vector3.new(v.X, -50, v.Z)
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+end
+
+-- AUTO GUN
 local isGettingGun = false
 local function AttemptGetGun(gun)
     if isGettingGun or not States.AutoGun then return end
@@ -240,91 +385,19 @@ local function AutoGunLoop()
     end
 end
 
--- FLING (DÖNMEYEN)
-local function StartFling()
-    task.spawn(function()
-        while States.Fling do
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local r = LocalPlayer.Character.HumanoidRootPart
-                r.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                local v = r.AssemblyLinearVelocity
-                r.AssemblyLinearVelocity = Vector3.new(v.X, -50, v.Z)
-            end
-            RunService.Heartbeat:Wait()
-        end
-    end)
-end
-
--- ESP SİSTEMİ (MM2 ve GLOBAL)
-local ESPFolder = Instance.new("Folder", game.CoreGui); ESPFolder.Name = "EnsESPFolder"
-task.spawn(function()
-    while true do
-        ESPFolder:ClearAllChildren()
-        
-        -- MM2 ESP
-        if States.MM2ESP then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then
-                    local role = GetPlayerRole(p)
-                    local col = Color3.new(1,1,1)
-                    if role == "Murderer" then col = Color3.fromRGB(255, 0, 0) end
-                    if role == "Sheriff" then col = Color3.fromRGB(0, 100, 255) end
-                    
-                    if role ~= "Innocent" then -- Sadece önemli rolleri göster
-                        local hl = Instance.new("Highlight", ESPFolder); hl.Adornee = p.Character; hl.FillColor = col; hl.OutlineColor = col; hl.FillTransparency = 0.5
-                    end
-                end
-            end
-            -- Silah ESP
-            for _, o in pairs(Workspace:GetDescendants()) do
-                if o.Name == "GunDrop" then
-                    local hl = Instance.new("Highlight", ESPFolder); hl.Adornee = o; hl.FillColor = Color3.fromRGB(255,215,0); hl.OutlineColor=Color3.fromRGB(255,215,0)
-                end
-            end
-        end
-
-        -- GLOBAL ESP
-        if States.GlobalESP then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then
-                    local hl = Instance.new("Highlight", ESPFolder); hl.Adornee = p.Character; hl.FillColor = Color3.fromRGB(255,0,0); hl.OutlineColor = Color3.fromRGB(255,255,255); hl.FillTransparency = 0.5
-                end
-            end
-        end
-        task.wait(1)
-    end
-end)
-
--- AIMBOT SİSTEMİ
+-- AIMBOT
 local FOVCircle = Drawing.new("Circle"); FOVCircle.Visible=false; FOVCircle.Radius=AIM_FOV; FOVCircle.Color=T_ACCENT; FOVCircle.Thickness=1
 RunService.RenderStepped:Connect(function()
-    FOVCircle.Position = UserInputService:GetMouseLocation()
-    FOVCircle.Visible = (States.GlobalAimbot or States.MM2Aimbot)
-    
-    if (States.GlobalAimbot or States.MM2Aimbot) and UserInputService:IsMouseButtonPressed(AIMBOT_KEY) then
+    FOVCircle.Position = UserInputService:GetMouseLocation(); FOVCircle.Visible = States.Aimbot
+    if States.Aimbot and UserInputService:IsMouseButtonPressed(AIMBOT_KEY) then
         local Target, Dist = nil, AIM_FOV
-        local MousePos = UserInputService:GetMouseLocation()
-        
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local IsEnemy = true -- Global için herkes düşman
-                
-                -- MM2 Mantığı
-                if States.MM2Aimbot then
-                    local MyRole = GetPlayerRole(LocalPlayer)
-                    local TRole = GetPlayerRole(p)
-                    IsEnemy = false
-                    if MyRole == "Sheriff" and TRole == "Murderer" then IsEnemy = true end
-                    if MyRole == "Murderer" and TRole ~= "Murderer" then IsEnemy = true end
-                    if TRole == "Murderer" then IsEnemy = true end -- Masumsan katile odaklan
-                end
-                
-                if IsEnemy then
-                    local pos, vis = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
-                    if vis then 
-                        local d = (Vector2.new(pos.X, pos.Y) - MousePos).Magnitude
-                        if d < Dist then Dist = d; Target = p.Character.HumanoidRootPart end 
-                    end
+                -- Basit en yakın hedef (Global)
+                local pos, vis = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                if vis then 
+                    local d = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+                    if d < Dist then Dist = d; Target = p.Character.HumanoidRootPart end 
                 end
             end
         end
@@ -332,31 +405,53 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- SILENT AIM
+local function GetClosestToMouse()
+    local target, dist = nil, AIM_FOV
+    local mousePos = UserInputService:GetMouseLocation()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+            local pos, vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
+            if vis then
+                local d = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                if d < dist then dist = d; target = p.Character.Head end
+            end
+        end
+    end
+    return target
+end
+RunService.RenderStepped:Connect(function()
+    if States.SilentAim then
+        local t = GetClosestToMouse()
+        if t then Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Position) end
+    end
+end)
+
 -- NOCLIP
 local function ToggleNoclip(state)
     States.Noclip = state
     if state then
-        RunService:BindToRenderStep("Noclip", 100, function()
-            if LocalPlayer.Character then for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end end
-        end)
-    else
-        RunService:UnbindFromRenderStep("Noclip")
-        if LocalPlayer.Character then for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = true end end end
-    end
+        RunService:BindToRenderStep("Noclip", 100, function() if LocalPlayer.Character then for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end end end)
+    else RunService:UnbindFromRenderStep("Noclip"); if LocalPlayer.Character then for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = true end end end end
 end
 
--- // --- TABLAR --- //
+-- // --- TABLAR & BUTONLAR --- //
+local TabRage = CreateTab("👹 RAGE", true)
 local TabMM2 = CreateTab("🔪 MM2")
 local TabGlobal = CreateTab("⚔️ GLOBAL")
 local TabVisual = CreateTab("👁️ GÖRSEL")
 local TabAdmin = CreateTab("👑 ADMİN")
 local TabMisc = CreateTab("🛠️ DİĞER")
 
--- 🔪 MM2 TAB
-CreateBtn(TabMM2, "🎯 KATİL/ŞERİF AIMBOT", function(s) States.MM2Aimbot = s; States.GlobalAimbot = false end)
-CreateBtn(TabMM2, "🛡️ ROL ESP (RENKLİ)", function(s) States.MM2ESP = s; States.GlobalESP = false end)
+-- RAGE
+CreateBtn(TabRage, "🧱 WALLCHECK (AÇIK/KAPALI)", function(s) States.WallCheck = s end)
+CreateBtn(TabRage, "🤬 TRIGGER BOT (FIXED)", function(s) ToggleTrigger(s) end)
+CreateBtn(TabRage, "💀 SILENT AIM (SERT KİLİT)", function(s) States.SilentAim = s end)
+
+-- MM2
+CreateBtn(TabMM2, "🛡️ ROL ESP (GÜÇLÜ)", function(s) ToggleESP(s) end)
 CreateBtn(TabMM2, "🔫 OTO SİLAH (KENE)", function(s) States.AutoGun = s; if s then task.spawn(AutoGunLoop) end end)
-CreateBtn(TabMM2, "🔪 KILL ALL (BIÇAK VARSA)", function(s)
+CreateBtn(TabMM2, "🔪 KILL ALL", function(s)
     States.KillAll = s
     if s then task.spawn(function()
         while States.KillAll do
@@ -365,7 +460,7 @@ CreateBtn(TabMM2, "🔪 KILL ALL (BIÇAK VARSA)", function(s)
                 if k.Parent ~= c then c.Humanoid:EquipTool(k) end
                 for _, v in pairs(Players:GetPlayers()) do
                     if not States.KillAll then break end
-                    if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+                    if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character.Humanoid.Health > 0 then
                         c.HumanoidRootPart.CFrame = v.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,2.5); k:Activate(); task.wait(0.35)
                     end
                 end
@@ -375,24 +470,18 @@ CreateBtn(TabMM2, "🔪 KILL ALL (BIÇAK VARSA)", function(s)
     end) end
 end)
 
--- ⚔️ GLOBAL TAB
-CreateBtn(TabGlobal, "🎯 GLOBAL AIMBOT (HERKES)", function(s) States.GlobalAimbot = s; States.MM2Aimbot = false end)
+-- GLOBAL
+CreateBtn(TabGlobal, "🎯 GLOBAL AIMBOT", function(s) States.Aimbot = s end)
 CreateBtn(TabGlobal, "🌪️ FLING (SABİT)", function(s) States.Fling = s; if s then ToggleNoclip(true); StartFling() else ToggleNoclip(false) end end)
 
--- 👁️ GÖRSEL TAB
-CreateBtn(TabVisual, "🛡️ GLOBAL ESP (HERKES)", function(s) States.GlobalESP = s; States.MM2ESP = false end)
+-- GÖRSEL
+CreateBtn(TabVisual, "🛡️ GLOBAL ESP (AKTİF ET)", function(s) ToggleESP(s) end)
 
--- 👑 ADMİN TAB
-CreateBtn(TabAdmin, "💸 DOLLAR HUB (AÇ)", function(s, btn)
-    loadstring(game:HttpGet("https://purplesstrat.github.io/Scripts/Cracked/DollarHub.lua"))()
-    btn.Text = "ÇALIŞTIRILDI"
-end)
-CreateBtn(TabAdmin, "🚀 INFINITE YIELD (AÇ)", function(s, btn)
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
-    btn.Text = "ÇALIŞTIRILDI"
-end)
+-- ADMİN
+CreateBtn(TabAdmin, "💸 DOLLAR HUB", function(s, b) loadstring(game:HttpGet("https://purplesstrat.github.io/Scripts/Cracked/DollarHub.lua"))(); b.Text="AÇILDI" end)
+CreateBtn(TabAdmin, "🚀 INFINITE YIELD", function(s, b) loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))(); b.Text="AÇILDI" end)
 
--- 🛠️ DİĞER TAB
+-- DİĞER
 CreateBtn(TabMisc, "⚡ HIZ: 100", function(s) States.Speed = s; RunService:BindToRenderStep("S",1,function() if States.Speed and LocalPlayer.Character then LocalPlayer.Character.Humanoid.WalkSpeed = 100 end end) if not s then LocalPlayer.Character.Humanoid.WalkSpeed=16 end end)
 CreateBtn(TabMisc, "🧱 NOCLIP (FIX)", function(s) ToggleNoclip(s) end)
 CreateBtn(TabMisc, "🌐 SERVER HOP", function()
@@ -403,7 +492,7 @@ CreateBtn(TabMisc, "🌐 SERVER HOP", function()
     if #x > 0 then TeleportService:TeleportToPlaceInstance(game.PlaceId, x[math.random(1, #x)]) end
 end)
 
--- // --- ŞİFRE --- //
+-- // ŞİFRE
 local KeyFrame = Instance.new("Frame", ScreenGui); KeyFrame.Size=UDim2.new(0,300,0,150); KeyFrame.Position=UDim2.new(0.5,-150,0.5,-75); KeyFrame.BackgroundColor3=T_BG; KeyFrame.Active=true; KeyFrame.Draggable=true
 Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0,8); Instance.new("UIStroke", KeyFrame).Color = T_ACCENT
 local KBox = Instance.new("TextBox", KeyFrame); KBox.Size=UDim2.new(0.8,0,0.3,0); KBox.Position=UDim2.new(0.1,0,0.2,0); KBox.PlaceholderText="Şifre (1234)"; KBox.BackgroundColor3=T_SIDE; KBox.TextColor3=T_TEXT
@@ -416,6 +505,6 @@ KBtn.MouseButton1Click:Connect(function()
         TweenService:Create(KeyFrame, TweenInfo.new(0.3), {Position=UDim2.new(0.5,-150,1.5,0)}):Play()
         task.wait(0.3); KeyFrame.Visible=false
         MainFrame.Visible=true; MainFrame.Size=UDim2.new(0,0,0,0)
-        TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {Size=UDim2.new(0,500,0,400)}):Play()
+        TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {Size=UDim2.new(0,500,0,450)}):Play()
     else KBox.Text="YANLIŞ"; task.wait(1); KBox.Text="" end
 end)
